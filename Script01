@@ -7,10 +7,8 @@
 #    (2) extract climatic data for the site,
 #    (3) compute the monotonic trends of mean annual temperature and total annual precipitation over the surveyed period,
 #    (4) compute the monotonic trend of abundance of Potamopyrgus antipodarum,
+#    (5) create meta regression analysis master file
 #    (6) export the results
-#    (7) export the results
-#    (8) export the results
-#    (9) export the results
 # 
 ########################################################################################################################################################################
 
@@ -46,6 +44,9 @@ NO3_MK_acf<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(acf(
 NO3_MK_acf<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(pacf(x, na.action = na.pass))))) # check for temporal autocorrelation
 
 NO3_MK<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(My.mmkh(x)))))# Modified Mann-Kendall Test For Serially Correlated Data Using Hamed and Rao (1998) Variance Correction Approach
+NO3_MK <- cbind(rownames(NO3_MK), data.frame(NO3_MK, row.names=NULL)) # transform rownames into first column
+colnames(NO3_MK)[1] = "site_id" # rename first column name
+
 write.csv(NO3_MK, "NO3_MK.csv") #export results
 # repeat this step for the other abiotic variables
 
@@ -53,51 +54,158 @@ write.csv(NO3_MK, "NO3_MK.csv") #export results
 # To run the following code, it is necessary to download the daily mean temperature and daily total precipitation data 
 # from the Gridded observational dataset for precipitation, temperature and sea level pressure in Europe, 
 # available at https://www.ecad.eu/download/ensembles/download.php
+# 1) Download file "tg_ens_mean_0.1deg_reg_v22.0e.nc" from: https://www.ecad.eu/download/ensembles/download.php#datafiles
+# 2) Extract .gz compressed files using:
+#    library(R.utils)
+#    R.utils::gunzip("tg_ens_mean_0.1deg_reg_v22.0e.nc")
+# 3) Extract data, see:
+#    http://geog.uoregon.edu/GeogR/topics/netCDF-read-ncdf4.html
+#    https://stackoverflow.com/questions/20621200/extract-time-series-of-a-point-lon-lat-from-netcdf-in-r
 
-lon <- 	EffectSizes_biodiv_DATA1$Longitude  # longitude of the target site					
-lat <-	EffectSizes_biodiv_DATA1$Latitude	# latitude  of the target site 	
+install.packages("sp")
+install.packages("raster")
+install.packages("ncdf4")
+library(sp)
+library(raster)
+library(ncdf4)
 
-# Set start and end year of the biotic time series at the site:
+df<-read.csv("WGS84.csv",sep=",",stringsAsFactors=FALSE, fileEncoding="UTF-8-BOM") # file containing all the required coordinated
 
-start.year <- EffectSizes_biodiv_DATA1$startYear  # set the starting year of the time series
-end.year <- EffectSizes_biodiv_DATA1$endYear  # set the end year of the time series
+#Temperature
+my_function <- function(lon, lat, site) {    
+  ncin <- nc_open("tg_ens_mean_0.1deg_reg_v22.0e.nc")
+  print(ncin)
+  t <- ncvar_get(ncin,"time")
+  tunits <- ncatt_get(ncin,"time","units")
+  nt <- dim(t)
+  obsoutput <- ncvar_get(ncin, # look for closest lon and lat
+                         start = c(which.min(abs(ncin$dim$longitude$vals - lon)),
+                                   which.min(abs(ncin$dim$latitude$vals - lat)),
+                                   1),
+                         count = c(1,1,-1))
+  DataMeanT <- data.frame(DateN = t, MeanDailyT = obsoutput)
+  nc_close(ncin) 
+  Data=DataMeanT
+  Data$Date=as.Date(Data$DateN)
+    Data$Year=format(Data$Date,"%Y")
+    Data$Month=format(Data$Date,"%m")
+    Data$YearMonth=format(Data$Date, format="%Y-%b")
+ # Data <- within(DataMeanT, {
+  #  Date <- as.Date(DateN, origin="2000-01-01")
+ #   Year <- format(Data$Date,"%Y")
+  #  Month <- format(Data$Date,"%m")
+  #  YearMonth <- format(Data$Date, format="%Y-%b")
+ # })
+  Data_annual <- with(Data, aggregate(list("AirT" = MeanDailyT), list(Year=YearMonth),#Year or Month
+                                      FUN = mean, na.action = na.pass))    
+  Data_annual$Site=site   #This line adds a column with the Site name 
+  
+  write.table(Data_annual, file = "ClimaticData.csv", row.names=FALSE, 
+              append = TRUE, col.names = F, sep = ", ", quote = TRUE)          # Export table, with append=TRUE it adds coulmns to an existing table 
+  return(Data_annual) # SAVE AGGREGATED DATA FRAME 
+} 
 
-# Extract .gz compressed files:
+# ITERATE THROUGH EACH LON/LAT PAIR ELEMENTWISE 
+write.table(data.frame("Year", "AirT", "Site"), file = "ClimaticData.csv", row.names=FALSE, 
+            append = F, col.names = F, sep = ", ", quote = TRUE)  # create a blank table template, values will be added to this template during the iteration 
 
-R.utils::gunzip("tg_0.1deg_reg_v17.0.nc.gz")
-R.utils::gunzip("rr_0.1deg_reg_v17.0.nc.gz")
+# ITERATE THROUGH EACH LON/LAT PAIR ELEMENTWISE
+df_list <- Map(my_function, df$E, df$N, df$Site)
 
-# Extract mean daily temperature at the site:
+#formatting of data
+Dv_temp <-read.csv("ClimaticData.csv", sep=",", stringsAsFactors=FALSE)
+head(Dv_temp)
+Dv_temp2<-do.call(rbind, str_split(Dv_temp$Year, '-'))
+head(Dv_temp2)
+Dv_temp2<-as.data.frame(Dv_temp2)
+colnames(Dv_temp2)[1] <- "Year"
+colnames(Dv_temp2)[2] <- "Month"
+head(Dv_temp2)
+Dv_temp$Year<-NULL
+new_temp <- cbind(Dv_temp2, Dv_temp)
+head(new_temp)
+colnames(new_temp)[3] <- "AirT"
+colnames(new_temp)[4] <- "Site"
+new_temp$Year <- as.numeric(new_temp$Year)
+new_temp$AirT <- as.numeric(new_temp$AirT)
+head(new_temp)
+new_temp2<-new_temp %>% group_by(Year,Site) %>% summarise(Mean_temp=mean(AirT))
+head(new_temp2)
+new_temp3 <- transform(new_temp2, LINK=paste(Site, Year, sep="_"))
+head(new_temp3)
 
-ncin <- nc_open("tg_0.1deg_reg_v17.0.nc" )
-t <- ncvar_get(ncin,"time")
-tunits <- ncatt_get(ncin,"time","units")
-nt <- dim(t)
-obsoutput <- ncvar_get(ncin, start= c(which.min(abs(ncin$dim$longitude$vals - lon)), # look for closest longitude
-                                      which.min(abs(ncin$dim$latitude$vals - lat)),  # look for closest latitude
-                                      1),
-                       count=c(1,1,-1))
-DataMeanT <- data.frame(DateN= t, MeanDailyT = obsoutput)
-nc_close(ncin)
-#check data
-head(DataMeanT)
-summary(DataMeanT)
+write.table(new_temp3,"Temp_data.csv",sep=";") # export result
 
-# Extract daily total precipitation at the site:
 
-ncinP <- nc_open("rr_0.1deg_reg_v17.0.nc" )
-t <- ncvar_get(ncinP,"time")
-tunits <- ncatt_get(ncinP,"time","units")
-obsoutput_P <- ncvar_get(ncinP, 
-                         start= c(which.min(abs(ncinP$dim$longitude$vals - lon)), # look for closest long
-                                  which.min(abs(ncinP$dim$latitude$vals - lat)),  # look for closest lat
-                                  1),
-                         count=c(1,1,-1))
-DataP <- data.frame(DateN= t, MeanDailyP = obsoutput_P)
-nc_close(ncinP)
-#check data
-head(DataP)
-summary(DataP)
+
+
+
+
+####Precipitation
+my_function <- function(lon, lat, site) {    
+  # Mean daily precipitation
+  ncin <- nc_open("rr_ens_mean_0.1deg_reg_v22.0e.nc")
+  print(ncin)
+  r <- ncvar_get(ncin,"time")
+  tunits <- ncatt_get(ncin,"time","units")
+  nt <- dim(r)
+  obsoutput <- ncvar_get(ncin, # look for closest lon and lat
+                         start = c(which.min(abs(ncin$dim$longitude$vals - lon)),
+                                   which.min(abs(ncin$dim$latitude$vals - lat)),
+                                   1),
+                         count = c(1,1,-1))
+  DataMeanRR <- data.frame(DateN = r, MeanDailyRR = obsoutput)
+  nc_close(ncin) 
+  Data=DataMeanRR
+  Data$Date=as.Date(Data$DateN,origin="1989-01-01")
+  Data$Year=format(Data$Date,"%Y")
+  Data$Month=format(Data$Date,"%m")
+  Data$YearMonth=format(Data$Date, format="%Y-%b")
+  # Data <- within(DataMeanT, {
+  #  Date <- as.Date(DateN, origin="2000-01-01")
+  #   Year <- format(Data$Date,"%Y")
+  #  Month <- format(Data$Date,"%m")
+  #  YearMonth <- format(Data$Date, format="%Y-%b")
+  # })
+  Data_annual <- with(Data, aggregate(list("Prec" = MeanDailyRR), list(Year=YearMonth),#Year or Month
+                                      FUN = mean, na.action = na.pass))    
+  Data_annual$Site=site   #This line adds a column with the Site name 
+  
+  write.table(Data_annual, file = "PrecData.csv", row.names=FALSE, 
+              append = TRUE, col.names = F, sep = ", ", quote = TRUE)          # Export table, with append=TRUE it adds coulmns to an existing table 
+  return(Data_annual) # SAVE AGGREGATED DATA FRAME 
+} 
+# ITERATE THROUGH EACH LON/LAT PAIR ELEMENTWISE 
+write.table(data.frame("Year", "Prec", "Site"), file = "PrecData.csv", row.names=FALSE, 
+            append = F, col.names = F, sep = ", ", quote = TRUE)  # create a blank table template, values will be added to this template during the iteration 
+
+# ITERATE THROUGH EACH LON/LAT PAIR ELEMENTWISE
+df_list <- Map(my_function, df$E, df$N, df$Site)
+
+#formatting of data
+Dv_prec <-read.csv("PrecData.csv", sep=",", stringsAsFactors=FALSE)
+head(Dv_prec)
+Dv2<-do.call(rbind, str_split(Dv_prec$Year, '-'))
+head(Dv2)
+Dv_2<-as.data.frame(Dv2)
+colnames(Dv_2)[1] <- "Year"
+colnames(Dv_2)[2] <- "Month"
+head(Dv_2)
+Dv_prec$Year<-NULL
+new <- cbind(Dv_2, Dv_prec)
+colnames(new)[3] <- "Prec"
+colnames(new)[4] <- "Site"
+new$Year <- as.numeric(new$Year)
+new$Prec <- as.numeric(new$Prec)
+new$Site <- as.character(new$Site)
+str(new)
+new2<-new %>% group_by(Year,Site) %>% summarise(Mean_prec=mean(Prec))
+head(new2)
+new3 <- transform(new2, LINK=paste(Site, Year, sep="_"))
+head(new3)
+
+write.table(new3,"Prec_data.csv",sep=";") # export result
+
 
 # (3) compute the monotonic trends of mean annual temperature and total annual precipitation over the surveyed period,
 # see step (1)
@@ -127,8 +235,16 @@ MK$site_id<-as.numeric(MK$site_id)
 
 write.csv(MK, "MK.csv") # export results
 
+(5) create meta regression analysis master file
+# All exported files were checked in excel for possible formatting issues
 
+#read data
+NO3_MK <-read.csv("NO3_MK.csv", sep=",", stringsAsFactors=FALSE)
+colnames(O3_MK)[11] = "NO3"
+NO3_MK_S<-NO3_MK[c("site_id","NO3")] #extract site_id and S-statistic, now renamed NO3
+summary(NO3_MK_S) #inspect data
 
-
+master_file <- merge(MK,NO3_MK_S,by="site_id") #merge the Dv trend analysis result with S-statistic of the MK trend test resuls
+#This step is to be repeated with all other abiotic variables
 
 
