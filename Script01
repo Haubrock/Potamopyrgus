@@ -16,6 +16,7 @@
 rm(list=ls()) #clear the working environment
 
 library(lme4)
+library(car)
 library(ggplot2)
 library(tidyverse)
 library(RColorBrewer)
