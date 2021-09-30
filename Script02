@@ -4,45 +4,30 @@
 #
 # This script includes the code for the following steps:
 #    (1) synthesize the results using meta-analytical models,
-#    (2) export the source data for creating the figures (to be used in Script 03),
-#
+#    
 ########################################################################################################################################################################
 
 (1) synthesize the results using meta-analytical models
 
-res.rma.Abund <- rma(yi = S_statistic, vi = old.variance, method="REML", data= total, control=list(maxiter=1000))
+# test run for the overall model
+res.rma.Abund <- rma(yi = S_statistic, vi = old.variance, method="REML", data= master_file, control=list(maxiter=1000))
+res.rma.Abund # inspect model
+
+#Consideration of explanatory variables
+master_file$Latitude<-as.numeric(master_file$Latitude) # ensure data is numeric
+master_file$Longitude<-as.numeric(master_file$Longitude) # ensure data is numeric
+master_file$StudyLength.s <- decostand(master_file$Study_length, "standardize") # standardize accordingly
+# the standardization is to be repeated with every environmental variable included. 
+# in this works case, this includes: the average temperature over the period, average precipiation over the period, the change in temperature (trends S-statistic), change in precipitation (trends S-statistic),
+# years after monitoring started, elevation, elevation drop, slope, ppt, runoff, NH4, NO3, percentage of urban areas in the site's proximity, percentage of open water bodies in the site's proximity
+
+res.rma.Abund <- rma(yi = S_statistic, vi = old.variance, mods=~Lat.s+Lon.s+S_Temp.s+S_Prec.s+Mean_temp.s+Mean_prec.s+Years_after_monitoring_start.s+Elevation.s+Elevation_drop.s+Slope.s+Runoff.s+Urban.s+Water.s-1, method="REML", data= total, control=list(maxiter=1000)) # model under consideration of  all covariates
 res.rma.Abund
 
-total$Latitude<-as.numeric(total$Latitude)
-total$Longitude<-as.numeric(total$Longitude)
-total$StudyLength.s <- decostand(total$Study_length, "standardize")
-total$Mean_temp.s <- decostand(total$Mean_temp, "standardize")
-total$Mean_prec.s <- decostand(total$Mean_prec, "standardize")
-total$S_Temp.s <- decostand(total$S_Temp, "standardize")
-total$S_Prec.s <- decostand(total$S_Prec, "standardize")
-total$Lat.s <- decostand(total$Latitude, "standardize")
-total$Lon.s <- decostand(total$Longitude,"standardize")
-total$Years_after_monitoring_start.s <- decostand(total$Years_after_monitoring_start,"standardize")
-total$Elevation.s <- decostand(total$Elevation, "standardize")
-total$Elevation_drop.s <- decostand(total$Elevation_drop, "standardize")
-total$Slope.s <- decostand(total$Slope, "standardize")
-total$PPT.s  <- decostand(total$PPT, "standardize")
-total$Runoff.s <- decostand(total$Runoff, "standardize")
-total$Nitro_NH4_trend.s <- decostand(total$Nitro_NH4_trend, "standardize")
-total$Nitro_NO3_trend.s <- decostand(total$Nitro_NO3_trend, "standardize")
-total$Urban.s <- decostand(total$Urban, "standardize")
-total$Water.s <- decostand(total$Water, "standardize")
-
-
-#all covariates
-res.rma.Abund <- rma(yi = S_statistic, vi = old.variance, mods=~Lat.s+Lon.s+S_Temp.s+S_Prec.s+Mean_temp.s+Mean_prec.s+Years_after_monitoring_start.s+Elevation.s+Elevation_drop.s+Slope.s+Runoff.s+Urban.s+Water.s-1, method="REML", data= total, control=list(maxiter=1000))
-res.rma.Abund
-
-library(car)
+# precautious test for variance inflation
 vif(res.rma.Abund)
 
-#model selection
-library(glmulti)
+# this step will identify the best fit covariates for the model.
 res <- glmulti(S_statistic ~ Lat.s+Lon.s+S_Temp.s+S_Prec.s+Mean_temp.s+Mean_prec.s+Years_after_monitoring_start.s+Elevation.s+Elevation_drop.s+Slope.s+Runoff.s+Urban.s+Water.s, 
                data=total,
                level=1, method="ML",crit="aicc", confsetsize=128)
@@ -52,15 +37,18 @@ top <- weightable(res)
 top <- top[top$aicc <= min(top$aicc) + 2,]
 top
 
-#tuned model
+#incluing the best fitting covariates into the meta regression model
 res.rma.Abund <- rma(yi = S_statistic, vi = old.variance, mods=~Lat.s + Runoff.s + Water.s-1, method="REML", data= total, control=list(maxiter=1000))
-res.rma.Abund
-#svg("all_trends.svg")
-plot_model(res.rma.Abund, vline.color = "black", transform = NULL)
-#dev.off()
+res.rma.Abund # inspect the model result
 
-### forest plot with extra annotations
-#svg("Species_trends.svg",height=30,width=15)
+#export or raw plot for inspection
+svg("all_trends.svg")
+plot_model(res.rma.Abund, vline.color = "black", transform = NULL)
+dev.off()
+
+#export a better version for later display
+# forest plot with extra annotations
+svg("trends.svg",height=30,width=15)
 op <- par(cex=.8, font=2)
 forest(res.rma.Abund, xlim=c(-400,400),
        ilab=cbind(total$site_id,
@@ -70,29 +58,10 @@ forest(res.rma.Abund, xlim=c(-400,400),
 op <- par(cex=0.6, font=2)
 
 
-#text(c(-1200,-1050,-870,-700,-600,-500,-400,-300,0), 155, c("P","Country", "TaxonomicGroup", "Temp_S","Temp_var","Prec_S", "Prec_var", "Naturalness", "Abundance-Trend"))
-#par(op)
-#text(-1400, -2, pos=4, cex=1, bquote(paste("RE Model (Q = ",
-#                                           .(formatC(res.rma.Abund$QE, digits=2, format="s")), ", df = ", .(res.rma.Abund$k - res.rma.Abund$p),
-#                                           ", p = ", .(formatC(res.rma.Abund$QEp, digits=2, format="s")), "; ", I^2, " = ",
-#                                           .(formatC(res.rma.Abund$I2, digits=1, format="s")), "%)")))
-#dev.off()
 
-#LM to explain trends
 
-total$Latitude<-as.numeric(total$Latitude)
-total$Longitude<-as.numeric(total$Longitude)
-total$StudyLength.s <- decostand(total$Study_length, "standardize")
-total$Mean_temp.s <- decostand(total$Mean_temp, "standardize")
-total$Mean_prec.s <- decostand(total$Mean_prec, "standardize")
-total$S_Temp.s <- decostand(total$S_Temp, "standardize")
-total$S_Prec.s <- decostand(total$S_Prec, "standardize")
-total$Lat.s <- decostand(total$Latitude, "standardize")
-total$Lon.s <- decostand(total$Longitude,"standardize")
-total$Years_after_monitoring_start.s <- decostand(total$Years_after_monitoring_start,"standardize")
-total$Elevation.s <- decostand(total$Elevation, "standardize")
-total$Elevation_drop.s <- decostand(total$Elevation_drop, "standardize")
-total$Slope.s <- decostand(total$Slope, "standardize")
-total$PPT.s  <- decostand(total$PPT, "standardize")
-total$Runoff.s <- decostand(total$Runoff, "standardize")
-total$Nitro_NH4_trend.s <- decostand(total$Nitro_NH4_trend, "standardize")
+
+
+
+
+
