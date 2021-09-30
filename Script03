@@ -8,7 +8,7 @@
 # 
 ########################################################################################################################################################################
 
-(1) 
+(1) Logistic fitting of individual time series
 
 year = [1992
 1993
@@ -61,47 +61,52 @@ abundance = [
 5858
 6322];
 
-%b1(1) = r
-%b1(2) = K
-%b1(3) = n0
+%reference for parameters
+%b1(1) = r					% Intrinsic growth rate
+%b1(2) = K					% Carrying capacity
+%b1(3) = n0					% Initial abundance
 
+%Least-squares curve fitting according to equation (S1) in Supplementary Note 4.
 modelfun1 = @(b1,t) b1(2).*(1-exp(-b1(1).*t))./(1 + (b1(1).*b1(2)./b1(3) -1).*exp(-b1(1).*t));  
-beta1 = [1 1 1];
-lb = [0,0,0];
-ub = [100,100000,10000];
-mdl1 = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);
+beta1 = [1 1 1];				% Initial guess for parameters
+lb = [0,0,0];					% Lower bound for estimated parameters
+ub = [100,100000,10000];			% Upper bound for estimated parameters
+mdl1 = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);	%Curve fitting
 
 
-t = 0:0.1:60;
+t = 0:0.1:60;				% Discretization of time from 0 to 60 using increments of 0.1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%Estimated parameters
 r =  mdl1(1)
 K = mdl1(2)
-N0 = mdl1(3)
+n0 = mdl1(3)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-n = K.*(1-exp(-r.*t))./(1 + (r.*K./N0 -1).*exp(-r.*t));
+%Plot of the logistic curve, see equation (S1) in Supplementary note 4.
+N = K.*(1-exp(-r.*t))./(1 + (r.*K./n0 -1).*exp(-r.*t));
 
-y = abundance;
-yfit = n(10.*time + 1);
+y = abundance;						% y is the abundance data 
+yfit = N(10.*time + 1);					% yfit is the abundance value based on the logistic curve
 
+%Calculation of statistical metrics (R^2 and RMSE)
 SStot = sum((y-mean(y)).^2);                            % Total Sum-Of-Squares
 SSres = sum((y(:)-yfit(:)).^2);                         % Residual Sum-Of-Squares
 R2 = 1-SSres./SStot                                     % R^2
-RMSE = sqrt(SSres./numel(abundance))
+RMSE = sqrt(SSres./numel(abundance))			% Root mean square error
 
-A = (N0.*K)./(r.*K-N0);
-tinf = (1./r).*log(K./A)
-ninf = 0.5.*(K-A)
-alp = 0.99;
-tsat = (1./r).*log((alp.*K + A)./(A.*(1-alp)))
-AA = A.*(1-alp)./(alp.*K + A);
-nsat = K.*(1 - AA)./(1 + K.*AA./A)
+A = (n0.*K)./(r.*K-n0);					% A is introduced for brevity
+tinf = (1./r).*log(K./A)				% time to point of inflection, see equation (S3) in Supplementary Note 4 
+Ninf = 0.5.*(K-A)					% Abundance value at point of inflection, see equation (S4) 
+alp = 0.99;						% alp is a fraction (i.e., 99%)
+tsat = (1./r).*log((alp.*K + A)./(A.*(1-alp)))		% time to near-saturation, see equation (S5) 
+AA = A.*(1-alp)./(alp.*K + A);				% AA introduced for brevity	
+Nsat = K.*(1 - AA)./(1 + K.*AA./A)			% Abundance value at near-saturation, see equation (S6) 
 
 hold on;
-plot(t,n,'k','linewidth',2);
-plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);
-plot(tinf,ninf,'r*','linewidth',3,'MarkerSize',6)
-plot(tsat,nsat,'r*','linewidth',3,'MarkerSize',6)
+plot(t,N,'k','linewidth',2); 				% Plot of logistic curve
+plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);	% Plot of abundance data
+plot(tinf,Ninf,'r*','linewidth',3,'MarkerSize',6)	% Plot of inflection point
+plot(tsat,Nsat,'r*','linewidth',3,'MarkerSize',6)	% Plot of near-saturation point
 axis([0 time(end).*2 0 abundance(end)*2]);
 xlabel('time, $t$','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
 ylabel('Cumulative abundance','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
@@ -110,10 +115,7 @@ set(gca,'fontsize',20); %axis numbering font size
 format shortG
 
 
-
-
-
-(2) Development of the 'global curve'
+(2) Development of the 'global logistic curve'
 
 year = [1979
 1986
@@ -198,7 +200,7 @@ abundance = [
 %b1(2) = K
 %b1(3) = n0
 
-modelfun1 = @(b1,t) b1(2).*(1-exp(-b1(1).*t))./(1 + (b1(1).*b1(2)./b1(3) -1).*exp(-b1(1).*t));  
+modelfun1 = @(b1,t) b1(2).*(1-exp(-b1(1).*t))./(1 + (b1(1).*b1(2)./b1(3) - 1).*exp(-b1(1).*t));  
 beta1 = [1 1 1];
 lb = [0,0,0];
 ub = [100,100000,10000];
@@ -212,54 +214,65 @@ r =  mdl1(1)
 K = mdl1(2)
 n0 = mdl1(3)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-n = K.*(1-exp(-r.*t))./(1 + (r.*K./n0 -1).*exp(-r.*t));
-
-
+N = K.*(1-exp(-r.*t))./(1 + (r.*K./n0 -1).*exp(-r.*t));
 
 y = abundance;
-yfit = n(10.*time + 1);
+yfit = N(10.*time + 1);
 
-SStot = sum((y-mean(y)).^2);                            % Total Sum-Of-Squares
-SSres = sum((y(:)-yfit(:)).^2);                         % Residual Sum-Of-Squares
-R2 = 1-SSres/SStot                                   % R^2
-RMSE = sqrt(SSres./numel(abundance))
+SStot = sum((y-mean(y)).^2);                           
+SSres = sum((y(:)-yfit(:)).^2);                         
+R2 = 1-SSres/SStot                                   	
+RMSE = sqrt(SSres./numel(abundance))			
 
 A = (n0.*K)./(r.*K-n0);
 tinf = (1./r).*log(K./A)
-ninf = 0.5.*(K-A)
+Ninf = 0.5.*(K-A)
 alp = 0.99;
 tsat = (1./r).*log((alp.*K + A)./(A.*(1-alp)))
 AA = A.*(1-alp)./(alp.*K + A);
-nsat = K.*(1 - AA)./(1 + K.*AA./A)
+Nsat = K.*(1 - AA)./(1 + K.*AA./A)
 
+% Computation of confidence limits for estimated parameters
 [x,resnorm,residual,exitflag,output,lambda,jacobian] = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);
-conf = nlparci(x,residual,'jacobian',jacobian)
+conf = nlparci(x,residual,'jacobian',jacobian) 		
 
-rdown = conf(1,1);
-Kdown = conf(2,1);
-n0down = conf(3,1);
+rdown = conf(1,1);									% Lower confidence limit for r
+Kdown = conf(2,1);									% Lower confidence limit for K
+n0down = conf(3,1);									% Lower confidence limit for n0
 
-rup = conf(1,2);
-Kup = conf(2,2);
-n0up = conf(3,2);
+rup = conf(1,2);									% Upper confidence limit for r
+Kup = conf(2,2);									% Upper confidence limit for K
+n0up = conf(3,2);									% Upper confidence limit for n0	
 
-ndown = Kdown.*(1-exp(-rdown.*t))./(1 + (rdown.*Kdown./n0down -1).*exp(-rdown.*t));
-nup = Kup.*(1-exp(-rup.*t))./(1 + (rup.*Kup./n0up -1).*exp(-rup.*t));
-jbfill(t,ndown,nup,'red','none',0,0.1);
+%Confidence region
+Ndown = Kdown.*(1-exp(-rdown.*t))./(1 + (rdown.*Kdown./n0down -1).*exp(-rdown.*t));	% Lower curve that envelopes the confidence region
+Nup = Kup.*(1-exp(-rup.*t))./(1 + (rup.*Kup./n0up -1).*exp(-rup.*t));			% Upper curve that envelopes the confidence region
+
+jbfill(t,Ndown,Nup,'red','none',0,0.1);							% Red colouring of confidence region as depicted in Fig. 4. 
+%The above requires the jbfill function, which can be found at: https://www.mathworks.com/matlabcentral/fileexchange/13188-shade-area-between-two-curves 
 
 hold on;
-plot(t,n,'k','linewidth',2);
-plot(t,ndown,'r-.','linewidth',2);
-plot(t,nup,'r-.','linewidth',2);
-plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);
-plot(tinf,ninf,'r*','linewidth',3,'MarkerSize',6)
-plot(tsat,nsat,'r*','linewidth',3,'MarkerSize',6)
+plot(t,N,'k','linewidth',2);								% Plot of global logistic curve
+plot(t,Ndown,'r-.','linewidth',2);							% Plot of the lower curve that envelopes the confidence region
+plot(t,Nup,'r-.','linewidth',2);							% Plot of the Upper curve that envelopes the confidence region
+plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);					% Plot of abundance data
+plot(tinf,Ninf,'r*','linewidth',3,'MarkerSize',6)					% Plot of inflection point
+plot(tsat,Nsat,'r*','linewidth',3,'MarkerSize',6)					% Plot of near-saturation point
 axis([0 60 0 abundance(end)*1.2]);
 xlabel('time, $t$','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
 ylabel('Cumulative abundance','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
 set(gca,'fontsize',20); %axis numbering font size
 
 format shortG
+
+
+
+
+
+
+
+
+
 
 
 
