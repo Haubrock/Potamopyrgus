@@ -1,6 +1,6 @@
 ########################################################################################################################################################################
 # Script 01 - Time-series-specific analysis.
-# haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
+# Haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
 
 # This script includes the code for the following steps:
 #    (1) compute the monotonic trends for the abiotic variables over the surveyed period,
