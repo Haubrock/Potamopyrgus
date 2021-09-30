@@ -1,1 +1,7 @@
 This page serves as a repository for the R code used in the paper: 
+Haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
+
+Script01, script02, and Script04 describe analyses performed in R.
+Script03 descibed the logistic fitting performed in Mathlab.
+
+
