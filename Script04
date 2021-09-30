@@ -1,0 +1,62 @@
+########################################################################################################################################################################
+# Script 04 - Time-series-specific analysis.
+# Haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
+#
+# This script includes the code for the following steps:
+#    (1) Data curation and preparation
+#    (2) Apply linear models to identify patterns and drivers of the  invasion curve
+# 
+########################################################################################################################################################################
+
+
+(1) Data curation and preparation
+
+#read data
+fits<-read.csv("Logistic_fits.csv", sep=",", stringsAsFactors=FALSE)
+
+# merge the final output from Script03 with the time-series specific results from Script01
+master_file_2<-merge(fits,master_file,by="site_id") #merge the Dv trend analysis result with S-statistic of the MK trend test resuls
+
+#repeat the "Consideration of explanatory variables" section from Script02
+master_file_2$Latitude<-as.numeric(master_file_2$Latitude) # ensure data is numeric
+master_file_2$Longitude<-as.numeric(master_file_2$Longitude) # ensure data is numeric
+master_file_2$StudyLength.s <- decostand(master_fil_2e$Study_length, "standardize") # standardize accordingly
+# the standardization is to be repeated with every environmental variable included. 
+# in this works case, this includes: the average temperature over the period, average precipiation over the period, the change in temperature (trends S-statistic), change in precipitation (trends S-statistic),
+# years after monitoring started, elevation, elevation drop, slope, ppt, runoff, NH4, NO3, percentage of urban areas in the site's proximity, percentage of open water bodies in the site's proximity
+# R², intrinsic growth rate r, initial population sie N0, and carrying capacity K, point of infliction tcrit and point the abundance plateaus tplat.
+
+(2) Model selection
+
+# this step will identify the best fit covariates for the model. 
+# exemplary shown on R²
+res1 <- glmulti(R.2.s ~ r.s+K.s+N0.s+observations.s+Lat.s+Lon.s+S_Temp.s+S_Prec.s+Mean_temp.s+Mean_prec.s+Elevation.s+Slope.s+Runoff.s+Urban.s+Water.s, 
+               data=mydata,
+               level=1, method="ML",crit="aicc", confsetsize=128)
+print(res1) # inspection
+plot(res1) # inspection
+top1 <- weightable(res1)
+top1 <- top1[top1$aicc <= min(top1$aicc) + 2,]
+top1 # extract best fitting covariates
+
+# this step is to be repeated for the intrinsic growth rate r, initial population sie N0, 
+# and carrying capacity K, point of infliction tcrit and point the abundance plateaus tplat
+
+(2) Apply linear models to identify patterns and drivers of the  invasion curve
+
+#apply model
+fm1 <- lmer(R.2.s ~ 1 + r.s + K.s + observations.s + Lat.s + Elevation.s + Slope.s + Runoff.s+ (1|Country),
+             data = mydata,control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))
+fm1 # inspection
+summary(fm1) # inspection
+
+# this step is to be repeated for the intrinsic growth rate r, initial population sie N0, 
+# and carrying capacity K, point of infliction tcrit and point the abundance plateaus tplat
+
+
+
+
+
+
+
+
