@@ -1,0 +1,134 @@
+########################################################################################################################################################################
+# Script 01 - Time-series-specific analysis.
+# haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
+
+# This script includes the code for the following steps:
+#    (1) compute the monotonic trends for the abiotic variables over the surveyed period,
+#    (2) extract climatic data for the site,
+#    (3) compute the monotonic trends of mean annual temperature and total annual precipitation over the surveyed period,
+#    (4) compute the monotonic trend of abundance of Potamopyrgus antipodarum,
+#    (6) export the results
+#    (7) export the results
+#    (8) export the results
+#    (9) export the results
+# 
+########################################################################################################################################################################
+
+
+rm(list=ls()) #clear the working environment
+
+library(lme4)
+library(ggplot2)
+library(tidyverse)
+library(RColorBrewer)
+library(dplyr)
+library(codyn)
+library(reshape2)
+library(metafor)
+library(sp)
+library(RColorBrewer)
+library(glmulti)
+
+(1) compute the monotonic trends for the abiotic variables over the surveyed period
+#read data
+NO3 <-read.csv("NITRO_NO3_mean.csv", sep=",", stringsAsFactors=FALSE)
+
+#data formatting
+NO3_data <- NO3[,-1]
+rownames(NO3_data) <- NO3[,1]
+CTLong <- data.frame(rows = rownames(NO3_data), stack(NO3_data))
+CTLong <- CTLong[order(CTLong$rows), ]
+CTLong$values<-as.numeric(CTLong$values)
+NO3 <- split(CTLong$values, CTLong$rows)
+NO3 <- NO3[lengths(NO3) >= 4] #select ony time series with length of4 or more occurrences
+
+NO3_MK_acf<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(acf(x, na.action = na.pass))))) # check for temporal autocorrelation
+NO3_MK_acf<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(pacf(x, na.action = na.pass))))) # check for temporal autocorrelation
+
+NO3_MK<-as.data.frame(do.call(rbind,lapply(NO3[1:297],function(x)unlist(My.mmkh(x)))))# Modified Mann-Kendall Test For Serially Correlated Data Using Hamed and Rao (1998) Variance Correction Approach
+write.csv(NO3_MK, "NO3_MK.csv") #export results
+# repeat this step for the other abiotic variables
+
+# (2) Gather climatic data 
+# To run the following code, it is necessary to download the daily mean temperature and daily total precipitation data 
+# from the Gridded observational dataset for precipitation, temperature and sea level pressure in Europe, 
+# available at https://www.ecad.eu/download/ensembles/download.php
+
+lon <- 	EffectSizes_biodiv_DATA1$Longitude  # longitude of the target site					
+lat <-	EffectSizes_biodiv_DATA1$Latitude	# latitude  of the target site 	
+
+# Set start and end year of the biotic time series at the site:
+
+start.year <- EffectSizes_biodiv_DATA1$startYear  # set the starting year of the time series
+end.year <- EffectSizes_biodiv_DATA1$endYear  # set the end year of the time series
+
+# Extract .gz compressed files:
+
+R.utils::gunzip("tg_0.1deg_reg_v17.0.nc.gz")
+R.utils::gunzip("rr_0.1deg_reg_v17.0.nc.gz")
+
+# Extract mean daily temperature at the site:
+
+ncin <- nc_open("tg_0.1deg_reg_v17.0.nc" )
+t <- ncvar_get(ncin,"time")
+tunits <- ncatt_get(ncin,"time","units")
+nt <- dim(t)
+obsoutput <- ncvar_get(ncin, start= c(which.min(abs(ncin$dim$longitude$vals - lon)), # look for closest longitude
+                                      which.min(abs(ncin$dim$latitude$vals - lat)),  # look for closest latitude
+                                      1),
+                       count=c(1,1,-1))
+DataMeanT <- data.frame(DateN= t, MeanDailyT = obsoutput)
+nc_close(ncin)
+#check data
+head(DataMeanT)
+summary(DataMeanT)
+
+# Extract daily total precipitation at the site:
+
+ncinP <- nc_open("rr_0.1deg_reg_v17.0.nc" )
+t <- ncvar_get(ncinP,"time")
+tunits <- ncatt_get(ncinP,"time","units")
+obsoutput_P <- ncvar_get(ncinP, 
+                         start= c(which.min(abs(ncinP$dim$longitude$vals - lon)), # look for closest long
+                                  which.min(abs(ncinP$dim$latitude$vals - lat)),  # look for closest lat
+                                  1),
+                         count=c(1,1,-1))
+DataP <- data.frame(DateN= t, MeanDailyP = obsoutput_P)
+nc_close(ncinP)
+#check data
+head(DataP)
+summary(DataP)
+
+# (3) compute the monotonic trends of mean annual temperature and total annual precipitation over the surveyed period,
+# see step (1)
+
+
+# (4) compute the monotonic trend of abundance of Potamopyrgus antipodarum,
+#read data
+Dv <-read.csv("Raw_data.csv", sep=",", stringsAsFactors=FALSE)
+
+#data formatting
+Dv_2 <- split(Dv$abundance, Dv$site_id)
+Dv_2 <- Dv_2[lengths(Dv_2) >= 4]
+
+# check for temporal autocorrelation
+Dv_MK_acf<-as.data.frame(do.call(rbind,lapply(Dv[1:297],function(x)unlist(acf(x, na.action = na.pass)))))
+Dv_MK_acf<-as.data.frame(do.call(rbind,lapply(Dv[1:297],function(x)unlist(pacf(x, na.action = na.pass)))))
+
+#apply the modified MK test 
+MK<-as.data.frame(do.call(rbind,lapply(Dv_2[1:306],function(x)unlist(My.mmkh(x)))))
+
+#data formatting
+setDT(MK, keep.rownames = TRUE)[]
+colnames(MK)[1] = "site_id"
+colnames(MK)[6] = "P_value"
+colnames(MK)[11] = "S_statistic"
+MK$site_id<-as.numeric(MK$site_id)
+
+write.csv(MK, "MK.csv") # export results
+
+
+
+
+
+
