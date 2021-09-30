@@ -15,6 +15,12 @@
 
 rm(list=ls()) #clear the working environment
 
+library(vegan)
+library(R.utils) 
+library(raster) 
+library(ncdf)
+library(rgdal)
+library(rgeos)
 library(lme4)
 library(car)
 library(ggplot2)
