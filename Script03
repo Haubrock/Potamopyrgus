@@ -1,0 +1,268 @@
+########################################################################################################################################################################
+# Script 03 - Time-series-specific analysis.
+# Haubrock et al. The invasion curve and dynamics of a European-wide introduced species. 
+
+# This script includes the code for the following steps:
+#    (1) Logistic fitting of individual time series
+#    (2) Development of the 'global curve'
+# 
+########################################################################################################################################################################
+
+(1) 
+
+year = [1992
+1993
+1994
+1995
+1996
+1997
+2002
+2003
+2004
+2005
+2006
+2007
+2008
+2009
+2010
+2011
+2013
+2014
+2015
+2016
+2017
+2018];
+
+time = year - year(1);
+
+n = time(end);
+
+abundance = [
+101
+273
+298
+333
+391
+416
+438
+489
+525
+535
+599
+935
+2423
+3127
+3167
+3172
+3178
+3586
+5082
+5442
+5858
+6322];
+
+%b1(1) = r
+%b1(2) = K
+%b1(3) = n0
+
+modelfun1 = @(b1,t) b1(2).*(1-exp(-b1(1).*t))./(1 + (b1(1).*b1(2)./b1(3) -1).*exp(-b1(1).*t));  
+beta1 = [1 1 1];
+lb = [0,0,0];
+ub = [100,100000,10000];
+mdl1 = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);
+
+
+t = 0:0.1:60;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+r =  mdl1(1)
+K = mdl1(2)
+N0 = mdl1(3)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+n = K.*(1-exp(-r.*t))./(1 + (r.*K./N0 -1).*exp(-r.*t));
+
+y = abundance;
+yfit = n(10.*time + 1);
+
+SStot = sum((y-mean(y)).^2);                            % Total Sum-Of-Squares
+SSres = sum((y(:)-yfit(:)).^2);                         % Residual Sum-Of-Squares
+R2 = 1-SSres./SStot                                     % R^2
+RMSE = sqrt(SSres./numel(abundance))
+
+A = (N0.*K)./(r.*K-N0);
+tinf = (1./r).*log(K./A)
+ninf = 0.5.*(K-A)
+alp = 0.99;
+tsat = (1./r).*log((alp.*K + A)./(A.*(1-alp)))
+AA = A.*(1-alp)./(alp.*K + A);
+nsat = K.*(1 - AA)./(1 + K.*AA./A)
+
+hold on;
+plot(t,n,'k','linewidth',2);
+plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);
+plot(tinf,ninf,'r*','linewidth',3,'MarkerSize',6)
+plot(tsat,nsat,'r*','linewidth',3,'MarkerSize',6)
+axis([0 time(end).*2 0 abundance(end)*2]);
+xlabel('time, $t$','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
+ylabel('Cumulative abundance','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
+set(gca,'fontsize',20); %axis numbering font size
+
+format shortG
+
+
+
+
+
+(2) Development of the 'global curve'
+
+year = [1979
+1986
+1987
+1988
+1989
+1990
+1991
+1992
+1993
+1994
+1995
+1996
+1997
+1998
+1999
+2000
+2001
+2002
+2003
+2004
+2005
+2006
+2007
+2008
+2009
+2010
+2011
+2012
+2013
+2014
+2015
+2016
+2017
+2018
+2019
+2020];
+
+time = year - year(1);
+
+n = time(end);
+
+abundance = [
+20
+52.4
+78.6
+138
+234.38
+422.58
+444.43
+486.43
+2753.03
+5302.70
+8232.47
+11118.77
+13052.67
+18171.64
+19868.09
+21175.76
+21756.69
+24939.86
+25049.28
+25072.41
+26651.16
+27650.81
+30090.77
+32802.66
+34204.52
+36004.89
+38330.71
+40400.82
+41504.61
+41707.14
+41872.90
+42028.47
+42418.36
+42555.26
+42809.37
+42877.37];
+
+%b1(1) = r
+%b1(2) = K
+%b1(3) = n0
+
+modelfun1 = @(b1,t) b1(2).*(1-exp(-b1(1).*t))./(1 + (b1(1).*b1(2)./b1(3) -1).*exp(-b1(1).*t));  
+beta1 = [1 1 1];
+lb = [0,0,0];
+ub = [100,100000,10000];
+mdl1 = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);
+
+
+t = 0:0.1:60;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+r =  mdl1(1)
+K = mdl1(2)
+n0 = mdl1(3)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+n = K.*(1-exp(-r.*t))./(1 + (r.*K./n0 -1).*exp(-r.*t));
+
+
+
+y = abundance;
+yfit = n(10.*time + 1);
+
+SStot = sum((y-mean(y)).^2);                            % Total Sum-Of-Squares
+SSres = sum((y(:)-yfit(:)).^2);                         % Residual Sum-Of-Squares
+R2 = 1-SSres/SStot                                   % R^2
+RMSE = sqrt(SSres./numel(abundance))
+
+A = (n0.*K)./(r.*K-n0);
+tinf = (1./r).*log(K./A)
+ninf = 0.5.*(K-A)
+alp = 0.99;
+tsat = (1./r).*log((alp.*K + A)./(A.*(1-alp)))
+AA = A.*(1-alp)./(alp.*K + A);
+nsat = K.*(1 - AA)./(1 + K.*AA./A)
+
+[x,resnorm,residual,exitflag,output,lambda,jacobian] = lsqcurvefit(modelfun1,beta1,time,abundance,lb,ub);
+conf = nlparci(x,residual,'jacobian',jacobian)
+
+rdown = conf(1,1);
+Kdown = conf(2,1);
+n0down = conf(3,1);
+
+rup = conf(1,2);
+Kup = conf(2,2);
+n0up = conf(3,2);
+
+ndown = Kdown.*(1-exp(-rdown.*t))./(1 + (rdown.*Kdown./n0down -1).*exp(-rdown.*t));
+nup = Kup.*(1-exp(-rup.*t))./(1 + (rup.*Kup./n0up -1).*exp(-rup.*t));
+jbfill(t,ndown,nup,'red','none',0,0.1);
+
+hold on;
+plot(t,n,'k','linewidth',2);
+plot(t,ndown,'r-.','linewidth',2);
+plot(t,nup,'r-.','linewidth',2);
+plot(time,abundance,'b*','linewidth',3,'MarkerSize',6);
+plot(tinf,ninf,'r*','linewidth',3,'MarkerSize',6)
+plot(tsat,nsat,'r*','linewidth',3,'MarkerSize',6)
+axis([0 60 0 abundance(end)*1.2]);
+xlabel('time, $t$','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
+ylabel('Cumulative abundance','Fontsize',25,'fontweight','bold','color','k','Interpreter','latex');
+set(gca,'fontsize',20); %axis numbering font size
+
+format shortG
+
+
+
+
+
+
